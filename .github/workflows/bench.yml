@@ -1,0 +1,30 @@
+name: timestamp decoder bench
+on: push
+jobs:
+  bench:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { path: bench }
+      - uses: actions/checkout@v4
+        with: { repository: czj/ruby-pg, ref: perf/text-timestamp-without-timegm, path: patched }
+      - uses: actions/checkout@v4
+        with: { repository: ged/ruby-pg, ref: v1.7.0, path: baseline }
+      - uses: ruby/setup-ruby@v1
+        with: { ruby-version: "4.0" }
+      - run: sudo apt-get install -y -q libpq-dev
+      - name: Compile both from source with the same flags
+        run: |
+          for dir in baseline patched; do
+            mkdir -p $dir/build $dir/lib/4.0
+            (cd $dir/build && ruby ../ext/extconf.rb > /dev/null && make -j4 > /dev/null && cp pg_ext.so ../lib/4.0/)
+          done
+      - name: Run (alternating, 3 rounds)
+        run: |
+          for round in 1 2 3; do
+            for dir in baseline patched; do echo "== $dir"; ruby -I $dir/lib bench/decoder_bench.rb; done
+          done
