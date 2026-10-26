@@ -5,7 +5,7 @@ git -C patched log --oneline -1
 echo "== Compile both from source with the same flags"
 for dir in baseline patched; do
   mkdir -p $dir/build $dir/lib/4.0
-  (cd $dir/build && ruby ../ext/extconf.rb > /dev/null && make -j4 > /dev/null && cp pg_ext.so ../lib/4.0/)
+  (cd $dir/build && ruby ../ext/extconf.rb > /dev/null && make -j4 > /dev/null && cp pg_ext.$(ruby -e "print RbConfig::CONFIG[%q(DLEXT)]") ../lib/4.0/)
   echo "$dir: $(grep -c HAVE_TIMEGM $dir/build/extconf.h || true) HAVE_TIMEGM in extconf.h"
 done
 
