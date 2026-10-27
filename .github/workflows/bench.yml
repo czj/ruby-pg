@@ -1,0 +1,42 @@
+name: binary local timestamp
+on: push
+jobs:
+  bench:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { path: bench }
+      - uses: actions/checkout@v4
+        with: { repository: czj/ruby-pg, ref: fix/binary-timestamp-db-local, path: patched }
+      - uses: actions/checkout@v4
+        with: { repository: ged/ruby-pg, ref: master, path: baseline }
+      - uses: ruby/setup-ruby@v1
+        with: { ruby-version: "4.0" }
+      - run: sudo apt-get install -y -q libpq-dev && gem install rspec --no-document
+      - name: Compile both from source with the same flags
+        run: |
+          for dir in baseline patched; do
+            mkdir -p $dir/build $dir/lib/4.0
+            (cd $dir/build && ruby ../ext/extconf.rb > /dev/null && make -j4 > /dev/null && cp pg_ext.so ../lib/4.0/)
+          done
+      - name: Type specs of the patch under glibc
+        run: cd patched && ruby -I lib -S rspec spec/pg/type_spec.rb
+      - name: Compare with PostgreSQL
+        run: |
+          sudo systemctl start postgresql.service
+          sudo -u postgres psql -qc "CREATE ROLE $USER SUPERUSER LOGIN" && createdb -h localhost $USER || createdb $USER
+          export DATABASE_URL="dbname=$USER"
+          for tz in Europe/Paris America/New_York Australia/Sydney Pacific/Apia Australia/Lord_Howe; do
+            for dir in baseline patched; do echo "== $dir"; TZ=$tz ruby -I $dir/lib bench/binary_local_timestamp_vs_postgresql.rb 1950 2011 2024 2038 2040 2100 | head -1; done
+          done
+      - name: Benchmark (alternating, 3 rounds)
+        run: |
+          for tz in Europe/Paris UTC; do
+            for round in 1 2 3; do
+              for dir in baseline patched; do echo "== $dir"; TZ=$tz ruby -I $dir/lib bench/binary_local_timestamp_bench.rb; done
+            done
+          done
