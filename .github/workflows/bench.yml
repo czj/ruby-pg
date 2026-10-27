@@ -7,6 +7,7 @@ jobs:
       matrix:
         os: [ubuntu-24.04, ubuntu-24.04-arm]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
         with: { path: bench }
@@ -28,10 +29,10 @@ jobs:
       - name: Compare with PostgreSQL
         run: |
           sudo systemctl start postgresql.service
-          sudo -u postgres psql -qc "CREATE ROLE $USER SUPERUSER LOGIN" && createdb -h localhost $USER || createdb $USER
+          sudo -u postgres psql -qc "CREATE ROLE $USER SUPERUSER LOGIN" && createdb $USER
           export DATABASE_URL="dbname=$USER"
           for tz in Europe/Paris America/New_York Australia/Sydney Pacific/Apia Australia/Lord_Howe; do
-            for dir in baseline patched; do echo "== $dir"; TZ=$tz ruby -I $dir/lib bench/binary_local_timestamp_vs_postgresql.rb 1950 2011 2024 2038 2040 2100 | head -1; done
+            for dir in baseline patched; do echo "== $dir"; TZ=$tz ruby -I $dir/lib bench/binary_local_timestamp_vs_postgresql.rb 1950 2011 2024 2038 2040 2100 < /dev/null | head -1; done
           done
       - name: Benchmark (alternating, 3 rounds)
         run: |
